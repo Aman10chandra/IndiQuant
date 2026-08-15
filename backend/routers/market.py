@@ -192,9 +192,14 @@ async def market_summary():
         name, symbol = pair
         fb = FALLBACK_INDICES.get(name, {"value": 20000.0, "change": 100.0, "change_pct": 0.5})
         try:
-            info = yf.Ticker(symbol).fast_info
-            curr = float(info.get("last_price", 0) or 0)
-            prev = float(info.get("previous_close", 0) or 0)
+            from services.data_service import _fetch_yahoo_quote_meta
+            meta = _fetch_yahoo_quote_meta(symbol)
+            curr = meta.get("price", 0.0)
+            prev = meta.get("prev_close", 0.0)
+            if not curr or not prev:
+                info = yf.Ticker(symbol).fast_info
+                curr = float(info.get("last_price", 0) or 0)
+                prev = float(info.get("previous_close", 0) or 0)
             if not curr or not prev:
                 curr = fb["value"]
                 prev = curr - fb["change"]
@@ -209,3 +214,4 @@ async def market_summary():
     tasks = [loop.run_in_executor(executor, fetch_index, item) for item in indices.items()]
     results = await asyncio.gather(*tasks)
     return dict(results)
+

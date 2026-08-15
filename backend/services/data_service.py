@@ -85,28 +85,62 @@ def normalize_ticker(ticker: str) -> str:
 
 # ─── Quote ────────────────────────────────────────────────────────────────────
 
+def _fetch_yahoo_quote_meta(ticker: str) -> dict:
+    t = normalize_ticker(ticker)
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=1d&interval=1d"
+        resp = requests.get(url, headers=headers, timeout=5)
+        if resp.ok:
+            meta = resp.json().get("chart", {}).get("result", [{}])[0].get("meta", {})
+            price = float(meta.get("regularMarketPrice") or meta.get("chartPreviousClose") or 0.0)
+            prev_close = float(meta.get("chartPreviousClose") or meta.get("previousClose") or price)
+            day_high = float(meta.get("regularMarketDayHigh") or meta.get("dayHigh") or price * 1.01)
+            day_low = float(meta.get("regularMarketDayLow") or meta.get("dayLow") or price * 0.99)
+            vol = int(meta.get("regularMarketVolume") or 1500000)
+            return {
+                "price": price,
+                "prev_close": prev_close,
+                "day_high": day_high,
+                "day_low": day_low,
+                "volume": vol,
+            }
+    except Exception:
+        pass
+    return {}
+
+
 @cached("quote")
 def get_quote(ticker: str) -> dict:
     raw_ticker = ticker.upper().replace(".NS", "").replace(".BO", "")
     t = normalize_ticker(ticker)
     
-    price = 0.0
-    prev_close = 0.0
-    info_dict = {}
+    meta = _fetch_yahoo_quote_meta(t)
+    price = meta.get("price", 0.0)
+    prev_close = meta.get("prev_close", 0.0)
+    day_high = meta.get("day_high", 0.0)
+    day_low = meta.get("day_low", 0.0)
+    vol = meta.get("volume", 1500000)
 
-    try:
-        info = yf.Ticker(t).fast_info
-        prev_close = float(info.get("previous_close", 0) or 0)
-        price = float(info.get("last_price", 0) or 0)
-        info_dict = info
-    except Exception:
-        pass
+    if not price:
+        try:
+            info = yf.Ticker(t).fast_info
+            prev_close = float(info.get("previous_close", 0) or 0)
+            price = float(info.get("last_price", 0) or 0)
+            day_high = float(info.get("day_high", 0) or 0)
+            day_low = float(info.get("day_low", 0) or 0)
+        except Exception:
+            pass
 
     fallback = FALLBACK_QUOTES.get(raw_ticker, {})
     if not price:
         price = float(fallback.get("price", 1000.0))
     if not prev_close:
-        prev_close = float(fallback.get("prev_close", 995.0))
+        prev_close = float(fallback.get("prev_close", price * 0.995))
+    if not day_high:
+        day_high = price * 1.01
+    if not day_low:
+        day_low = price * 0.99
 
     change = price - prev_close
     change_pct = (change / prev_close * 100) if prev_close else 0.0
@@ -119,22 +153,101 @@ def get_quote(ticker: str) -> dict:
         "prev_close": round(prev_close, 2),
         "change": round(change, 2),
         "change_pct": round(change_pct, 2),
-        "volume": int(info_dict.get("three_month_average_volume", 1500000) or 1500000),
-        "market_cap": int(info_dict.get("market_cap", fallback.get("market_cap", 500000000000)) or 500000000000),
-        "day_high": float(info_dict.get("day_high", price * 1.01) or price * 1.01),
-        "day_low": float(info_dict.get("day_low", price * 0.99) or price * 0.99),
-        "week_52_high": float(info_dict.get("year_high", price * 1.25) or price * 1.25),
-        "week_52_low": float(info_dict.get("year_low", price * 0.8) or price * 0.8),
+        "volume": vol,
+        "market_cap": int(fallback.get("market_cap", 500000000000)),
+        "day_high": round(day_high, 2),
+        "day_low": round(day_low, 2),
+        "week_52_high": round(price * 1.25, 2),
+        "week_52_low": round(price * 0.8, 2),
         "currency": "INR",
     }
 
 
 # ─── Price History ────────────────────────────────────────────────────────────
 
+def _fetch_yahoo_chart_api(ticker: str, period: str = "3mo") -> list[dict]:
+    """Fetch real live OHLCV time-series directly from Yahoo Finance v8 chart API."""
+    t = normalize_ticker(ticker)
+    range_map = {
+        "1d": "1d", "5d": "5d", "1mo": "1mo",
+        "3mo": "3mo", "6mo": "6mo", "1y": "1y", "5y": "5y",
+    }
+    interval_map = {
+        "1d": "5m", "5d": "15m", "1mo": "1d",
+        "3mo": "1d", "6mo": "1d", "1y": "1d", "5y": "1wk",
+    }
+    r_val = range_map.get(period, "1mo")
+    i_val = interval_map.get(period, "1d")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+    }
+
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range={r_val}&interval={i_val}"
+    try:
+        resp = requests.get(url, headers=headers, timeout=6)
+        if resp.ok:
+            body = resp.json()
+            results_arr = body.get("chart", {}).get("result", [])
+            if results_arr:
+                data = results_arr[0]
+                timestamps = data.get("timestamp", [])
+                
+                # If 1d was empty (e.g. weekend / closed market), load 5d
+                if period == "1d" and not timestamps:
+                    url_5d = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=5d&interval=15m"
+                    r5 = requests.get(url_5d, headers=headers, timeout=5)
+                    if r5.ok:
+                        d5 = r5.json().get("chart", {}).get("result", [])
+                        if d5:
+                            data = d5[0]
+                            timestamps = data.get("timestamp", [])
+                            i_val = "15m"
+
+                indicators = data.get("indicators", {}).get("quote", [{}])[0]
+                opens = indicators.get("open", [])
+                highs = indicators.get("high", [])
+                lows = indicators.get("low", [])
+                closes = indicators.get("close", [])
+                volumes = indicators.get("volume", [])
+
+                points = []
+                for idx, ts in enumerate(timestamps):
+                    c = closes[idx] if idx < len(closes) else None
+                    if c is None or pd.isna(c):
+                        continue
+                    o = opens[idx] if idx < len(opens) and opens[idx] is not None and not pd.isna(opens[idx]) else c
+                    h = highs[idx] if idx < len(highs) and highs[idx] is not None and not pd.isna(highs[idx]) else max(o, c)
+                    l = lows[idx] if idx < len(lows) and lows[idx] is not None and not pd.isna(lows[idx]) else min(o, c)
+                    v = volumes[idx] if idx < len(volumes) and volumes[idx] is not None and not pd.isna(volumes[idx]) else 0
+
+                    dt = pd.to_datetime(ts, unit="s")
+                    points.append({
+                        "date": dt.strftime("%Y-%m-%d %H:%M") if i_val in ["5m", "15m"] else dt.strftime("%Y-%m-%d"),
+                        "open": round(float(o), 2),
+                        "high": round(float(h), 2),
+                        "low": round(float(l), 2),
+                        "close": round(float(c), 2),
+                        "volume": int(v),
+                    })
+                if points:
+                    return points
+    except Exception:
+        pass
+
+    return []
+
+
 @cached("history")
 def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
+    # 1. First priority: Direct Live Yahoo Finance Chart API
+    direct_pts = _fetch_yahoo_chart_api(ticker, period)
+    if direct_pts:
+        return direct_pts
+
+    # 2. Second priority: yfinance library
     t = normalize_ticker(ticker)
-    
     interval_map = {
         "1d": "5m", "5d": "15m", "1mo": "1d",
         "3mo": "1d", "6mo": "1d", "1y": "1d", "5y": "1wk",
@@ -157,7 +270,7 @@ def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
     except Exception:
         pass
 
-    # Fallback simulation for reliable chart display
+    # 3. Emergency fallback if internet is completely down
     raw = ticker.upper().replace(".NS", "").replace(".BO", "")
     quote_info = FALLBACK_QUOTES.get(raw, {})
     if "NSE" in t or "NIFTY" in raw:
@@ -182,6 +295,7 @@ def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
         }
         for i in range(points)
     ]
+
 
 
 
