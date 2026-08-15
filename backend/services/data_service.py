@@ -31,6 +31,21 @@ TICKER_NAMES = {
     "LT": "Larsen & Toubro Ltd.",
     "BHARTIARTL": "Bharti Airtel Ltd.",
     "KOTAKBANK": "Kotak Mahindra Bank Ltd.",
+    "ONGC": "Oil and Natural Gas Corporation Ltd.",
+    "POWERGRID": "Power Grid Corporation of India Ltd.",
+    "NTPC": "NTPC Ltd.",
+    "COALINDIA": "Coal India Ltd.",
+    "TITAN": "Titan Company Ltd.",
+    "MARUTI": "Maruti Suzuki India Ltd.",
+    "M&M": "Mahindra & Mahindra Ltd.",
+    "HCLTECH": "HCL Technologies Ltd.",
+    "SUNPHARMA": "Sun Pharmaceutical Industries Ltd.",
+    "TATACONSUM": "Tata Consumer Products Ltd.",
+    "ULTRACEMCO": "UltraTech Cement Ltd.",
+    "ADANIENT": "Adani Enterprises Ltd.",
+    "NESTLEIND": "Nestle India Ltd.",
+    "ASIANPAINT": "Asian Paints Ltd.",
+    "JSWSTEEL": "JSW Steel Ltd.",
 }
 
 FALLBACK_QUOTES = {
@@ -44,7 +59,13 @@ FALLBACK_QUOTES = {
     "ITC": {"name": "ITC Ltd.", "price": 492.50, "prev_close": 490.00, "change": 2.50, "change_pct": 0.51, "market_cap": 6150000000000},
     "TATAMOTORS": {"name": "Tata Motors Ltd.", "price": 985.00, "prev_close": 978.00, "change": 7.00, "change_pct": 0.72, "market_cap": 3260000000000},
     "HINDUNILVR": {"name": "Hindustan Unilever Ltd.", "price": 2740.00, "prev_close": 2730.00, "change": 10.00, "change_pct": 0.37, "market_cap": 6430000000000},
+    "ONGC": {"name": "Oil and Natural Gas Corporation Ltd.", "price": 318.50, "prev_close": 315.00, "change": 3.50, "change_pct": 1.11, "market_cap": 4010000000000},
+    "POWERGRID": {"name": "Power Grid Corporation of India Ltd.", "price": 342.10, "prev_close": 339.50, "change": 2.60, "change_pct": 0.77, "market_cap": 3180000000000},
+    "NTPC": {"name": "NTPC Ltd.", "price": 412.00, "prev_close": 408.20, "change": 3.80, "change_pct": 0.93, "market_cap": 3990000000000},
+    "TITAN": {"name": "Titan Company Ltd.", "price": 3480.00, "prev_close": 3450.00, "change": 30.00, "change_pct": 0.87, "market_cap": 3090000000000},
+    "MARUTI": {"name": "Maruti Suzuki India Ltd.", "price": 12350.00, "prev_close": 12220.00, "change": 130.00, "change_pct": 1.06, "market_cap": 3880000000000},
 }
+
 
 # ─── NSE Ticker normalizer ────────────────────────────────────────────────────
 
@@ -137,7 +158,17 @@ def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
         pass
 
     # Fallback simulation for reliable chart display
-    base_price = 24395.0 if "NSE" in t or "NIFTY" in ticker.upper() else (79880.0 if "BSE" in t or "SENSEX" in ticker.upper() else 1500.0)
+    raw = ticker.upper().replace(".NS", "").replace(".BO", "")
+    quote_info = FALLBACK_QUOTES.get(raw, {})
+    if "NSE" in t or "NIFTY" in raw:
+        base_price = 24395.85
+    elif "BSE" in t or "SENSEX" in raw:
+        base_price = 79879.96
+    elif quote_info.get("price"):
+        base_price = float(quote_info["price"])
+    else:
+        base_price = 500.0
+
     points = 24 if period in ["1d", "5d"] else 30
     import math
     return [
@@ -151,6 +182,7 @@ def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
         }
         for i in range(points)
     ]
+
 
 
 FALLBACK_FUNDAMENTALS = {
