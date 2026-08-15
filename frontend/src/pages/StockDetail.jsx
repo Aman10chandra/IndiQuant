@@ -423,9 +423,9 @@ function generateFallbackStockNews(ticker = 'STOCK', name = '') {
               </div>
             ) : aiSummary ? (
               <div>
-                <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--text-primary)' }}>
+                <div style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
                   {aiSummary.summary}
-                </p>
+                </div>
                 <div className="disclaimer">{aiSummary.disclaimer}</div>
               </div>
             ) : (
@@ -524,9 +524,9 @@ function generateFallbackStockNews(ticker = 'STOCK', name = '') {
                   </div>
                 ) : techRead ? (
                   <div>
-                    <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--text-primary)' }}>
+                    <div style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
                       {techRead.narrative}
-                    </p>
+                    </div>
                     <div className="disclaimer">{techRead.disclaimer}</div>
                   </div>
                 ) : (

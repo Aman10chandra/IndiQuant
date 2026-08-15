@@ -630,16 +630,17 @@ export default function DigestPage() {
                     }} />
 
                     {/* Narrative Summary Body */}
-                    <p style={{
+                    <div style={{
                       fontSize: 13.5,
                       lineHeight: 1.65,
                       fontFamily: 'Inter, sans-serif',
                       color: 'var(--text-primary)',
                       opacity: 0.95,
                       margin: 0,
+                      whiteSpace: 'pre-line'
                     }}>
                       {item.summary}
-                    </p>
+                    </div>
                   </div>
                 </div>
               );
