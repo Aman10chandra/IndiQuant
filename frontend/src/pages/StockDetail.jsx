@@ -5,7 +5,8 @@ import StockChart from '../components/StockChart';
 import MetricCard from '../components/MetricCard';
 import {
   getQuote, getHistory, getFundamentals, getNews,
-  getIndicators, getFundamentalsSummary, getTechnicalRead
+  getIndicators, getFundamentalsSummary, getTechnicalRead,
+  INDIAN_STOCKS_DATA
 } from '../lib/api';
 import { aiStorage } from '../lib/aiStorage';
 
@@ -29,13 +30,50 @@ const AVAILABLE_TICKERS = [
 
 export default function StockDetail() {
   const { ticker } = useParams();
+  const cleanTicker = (ticker || '').toUpperCase().replace('.NS', '').replace('.BO', '');
   const navigate = useNavigate();
   const [period, setPeriod] = useState('3mo');
   const [activeTab, setActiveTab] = useState('overview');
 
-  const [quote, setQuote] = useState(null);
+  const [quote, setQuote] = useState(() => {
+    const ref = INDIAN_STOCKS_DATA[cleanTicker];
+    if (ref) {
+      const change = ref.price - ref.prev_close;
+      const change_pct = (change / ref.prev_close) * 100;
+      return {
+        ticker: cleanTicker,
+        name: ref.name,
+        price: ref.price,
+        prev_close: ref.prev_close,
+        change: Number(change.toFixed(2)),
+        change_pct: Number(change_pct.toFixed(2)),
+        market_cap: ref.mcap || 500000000000,
+      };
+    }
+    return null;
+  });
+
   const [history, setHistory] = useState([]);
-  const [fundamentals, setFundamentals] = useState(null);
+  const [fundamentals, setFundamentals] = useState(() => {
+    const ref = INDIAN_STOCKS_DATA[cleanTicker];
+    if (ref) {
+      return {
+        ticker: cleanTicker,
+        name: ref.name,
+        sector: ref.sector,
+        pe_ratio: ref.pe,
+        pb_ratio: ref.pb,
+        eps: ref.eps,
+        debt_to_equity: ref.de,
+        roe: ref.roe,
+        revenue_growth: ref.rev_g,
+        earnings_growth: ref.earn_g,
+        market_cap: ref.mcap,
+      };
+    }
+    return null;
+  });
+
   const [news, setNews] = useState([]);
   const [indicators, setIndicators] = useState(null);
 
