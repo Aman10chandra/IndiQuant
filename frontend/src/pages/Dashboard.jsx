@@ -5,17 +5,17 @@ import { getWatchlist, getMarketSummary } from '../lib/api';
 import IndexMiniChart from '../components/IndexMiniChart';
 
 const DEFAULT_WATCHLIST_ITEMS = [
-  { id: '1', ticker: 'TCS', name: 'Tata Consultancy Services', price: 4180.5, change: 30.5, change_pct: 0.73, status: 'Bullish', sector: 'IT Services', time: '11 mins ago' },
-  { id: '2', ticker: 'RELIANCE', name: 'Reliance Industries', price: 2980.2, change: 15.2, change_pct: 0.51, status: 'Bullish', sector: 'Energy & Retail', time: '32 mins ago' },
-  { id: '3', ticker: 'INFY', name: 'Infosys Limited', price: 1820.0, change: 9.5, change_pct: 0.52, status: 'Bullish', sector: 'IT Services', time: '1 hour ago' },
-  { id: '4', ticker: 'HDFCBANK', name: 'HDFC Bank Limited', price: 1640.1, change: 8.1, change_pct: 0.5, status: 'Process', sector: 'Banking', time: '3 hours ago' },
-  { id: '5', ticker: 'WIPRO', name: 'Wipro Limited', price: 520.4, change: 2.4, change_pct: 0.46, status: 'Bullish', sector: 'IT Services', time: '5 hours ago' },
-  { id: '6', ticker: 'BAJFINANCE', name: 'Bajaj Finance', price: 6850.0, change: 50.0, change_pct: 0.74, status: 'Bullish', sector: 'Financials', time: '1 day ago' },
+  { id: '1', ticker: 'TCS', name: 'Tata Consultancy Services', price: 2361.00, change: -14.00, change_pct: -0.59, status: 'Process', sector: 'IT Services', time: '11 mins ago' },
+  { id: '2', ticker: 'RELIANCE', name: 'Reliance Industries', price: 1310.00, change: -7.00, change_pct: -0.53, status: 'Process', sector: 'Energy & Retail', time: '32 mins ago' },
+  { id: '3', ticker: 'INFY', name: 'Infosys Limited', price: 1169.20, change: -5.80, change_pct: -0.49, status: 'Process', sector: 'IT Services', time: '1 hour ago' },
+  { id: '4', ticker: 'HDFCBANK', name: 'HDFC Bank Limited', price: 1640.10, change: 8.10, change_pct: 0.50, status: 'Bullish', sector: 'Banking', time: '3 hours ago' },
+  { id: '5', ticker: 'WIPRO', name: 'Wipro Limited', price: 520.40, change: 2.40, change_pct: 0.46, status: 'Bullish', sector: 'IT Services', time: '5 hours ago' },
+  { id: '6', ticker: 'BAJFINANCE', name: 'Bajaj Finance', price: 6850.00, change: 50.00, change_pct: 0.74, status: 'Bullish', sector: 'Financials', time: '1 day ago' },
 ];
 
 const DEFAULT_MARKET = {
-  NIFTY50: { value: 24395.85, change: 125.4, change_pct: 0.52 },
-  SENSEX: { value: 79879.96, change: 380.2, change_pct: 0.48 },
+  NIFTY50: { value: 24366.00, change: -29.80, change_pct: -0.12 },
+  SENSEX: { value: 78009.25, change: -70.75, change_pct: -0.09 },
 };
 
 const SECTORS_HEATMAP = [
