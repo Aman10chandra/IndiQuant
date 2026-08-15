@@ -49,9 +49,9 @@ TICKER_NAMES = {
 }
 
 FALLBACK_QUOTES = {
-    "TCS": {"name": "Tata Consultancy Services Ltd.", "price": 4180.50, "prev_close": 4150.00, "change": 30.50, "change_pct": 0.73, "market_cap": 15120000000000},
-    "RELIANCE": {"name": "Reliance Industries Ltd.", "price": 2980.20, "prev_close": 2965.00, "change": 15.20, "change_pct": 0.51, "market_cap": 20150000000000},
-    "INFY": {"name": "Infosys Ltd.", "price": 1820.00, "prev_close": 1810.50, "change": 9.50, "change_pct": 0.52, "market_cap": 7560000000000},
+    "TCS": {"name": "Tata Consultancy Services Ltd.", "price": 2361.00, "prev_close": 2375.00, "change": -14.00, "change_pct": -0.59, "market_cap": 15120000000000},
+    "RELIANCE": {"name": "Reliance Industries Ltd.", "price": 1310.00, "prev_close": 1317.00, "change": -7.00, "change_pct": -0.53, "market_cap": 17700000000000},
+    "INFY": {"name": "Infosys Ltd.", "price": 1169.20, "prev_close": 1175.00, "change": -5.80, "change_pct": -0.49, "market_cap": 7560000000000},
     "HDFCBANK": {"name": "HDFC Bank Ltd.", "price": 1640.10, "prev_close": 1632.00, "change": 8.10, "change_pct": 0.50, "market_cap": 12500000000000},
     "WIPRO": {"name": "Wipro Ltd.", "price": 520.40, "prev_close": 518.00, "change": 2.40, "change_pct": 0.46, "market_cap": 2720000000000},
     "BAJFINANCE": {"name": "Bajaj Finance Ltd.", "price": 6850.00, "prev_close": 6800.00, "change": 50.00, "change_pct": 0.74, "market_cap": 4230000000000},
@@ -59,7 +59,7 @@ FALLBACK_QUOTES = {
     "ITC": {"name": "ITC Ltd.", "price": 492.50, "prev_close": 490.00, "change": 2.50, "change_pct": 0.51, "market_cap": 6150000000000},
     "TATAMOTORS": {"name": "Tata Motors Ltd.", "price": 985.00, "prev_close": 978.00, "change": 7.00, "change_pct": 0.72, "market_cap": 3260000000000},
     "HINDUNILVR": {"name": "Hindustan Unilever Ltd.", "price": 2740.00, "prev_close": 2730.00, "change": 10.00, "change_pct": 0.37, "market_cap": 6430000000000},
-    "ONGC": {"name": "Oil and Natural Gas Corporation Ltd.", "price": 318.50, "prev_close": 315.00, "change": 3.50, "change_pct": 1.11, "market_cap": 4010000000000},
+    "ONGC": {"name": "Oil and Natural Gas Corporation Ltd.", "price": 236.40, "prev_close": 239.90, "change": -3.50, "change_pct": -1.46, "market_cap": 2970000000000},
     "POWERGRID": {"name": "Power Grid Corporation of India Ltd.", "price": 342.10, "prev_close": 339.50, "change": 2.60, "change_pct": 0.77, "market_cap": 3180000000000},
     "NTPC": {"name": "NTPC Ltd.", "price": 412.00, "prev_close": 408.20, "change": 3.80, "change_pct": 0.93, "market_cap": 3990000000000},
     "TITAN": {"name": "Titan Company Ltd.", "price": 3480.00, "prev_close": 3450.00, "change": 30.00, "change_pct": 0.87, "market_cap": 3090000000000},
