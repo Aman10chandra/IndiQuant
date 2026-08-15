@@ -174,8 +174,8 @@ async def remove_from_watchlist(ticker: str, db: AsyncSession = Depends(get_db))
 
 
 FALLBACK_INDICES = {
-    "NIFTY50": {"value": 24395.85, "change": 125.40, "change_pct": 0.52},
-    "SENSEX": {"value": 79879.96, "change": 380.20, "change_pct": 0.48},
+    "NIFTY50": {"value": 24366.00, "change": -29.80, "change_pct": -0.12},
+    "SENSEX": {"value": 78009.25, "change": -70.75, "change_pct": -0.09},
     "NIFTY_BANK": {"value": 52635.25, "change": 240.10, "change_pct": 0.46},
     "NIFTY_IT": {"value": 38453.90, "change": 190.50, "change_pct": 0.50},
 }
@@ -184,22 +184,23 @@ FALLBACK_INDICES = {
 @router.get("/market-summary")
 @cached("quote")
 async def market_summary():
-    """NIFTY 50 and SENSEX summary."""
+    """NIFTY 50 and SENSEX summary with ultra-fast RAM cache."""
+    from services.data_service import get_ram_cached, set_ram_cached, _fetch_yahoo_quote_meta
+    
+    cached_summary = get_ram_cached("market_summary", ttl_seconds=30)
+    if cached_summary:
+        return cached_summary
+
     indices = {"NIFTY50": "^NSEI", "SENSEX": "^BSESN", "NIFTY_BANK": "^NSEBANK", "NIFTY_IT": "^CNXIT"}
     loop = asyncio.get_running_loop()
 
     def fetch_index(pair):
         name, symbol = pair
-        fb = FALLBACK_INDICES.get(name, {"value": 20000.0, "change": 100.0, "change_pct": 0.5})
+        fb = FALLBACK_INDICES.get(name, {"value": 24000.0, "change": 0.0, "change_pct": 0.0})
         try:
-            from services.data_service import _fetch_yahoo_quote_meta
             meta = _fetch_yahoo_quote_meta(symbol)
             curr = meta.get("price", 0.0)
             prev = meta.get("prev_close", 0.0)
-            if not curr or not prev:
-                info = yf.Ticker(symbol).fast_info
-                curr = float(info.get("last_price", 0) or 0)
-                prev = float(info.get("previous_close", 0) or 0)
             if not curr or not prev:
                 curr = fb["value"]
                 prev = curr - fb["change"]
@@ -213,5 +214,7 @@ async def market_summary():
 
     tasks = [loop.run_in_executor(executor, fetch_index, item) for item in indices.items()]
     results = await asyncio.gather(*tasks)
-    return dict(results)
+    res_dict = dict(results)
+    set_ram_cached("market_summary", res_dict)
+    return res_dict
 

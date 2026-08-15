@@ -15,12 +15,19 @@ load_dotenv()
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 
 
+import asyncio
+from services.data_service import warmup_and_maintain_market_cache
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize database tables on startup
     await init_db()
     print("[INFO] Database initialized")
+    # Launch background RAM cache maintainer
+    cache_task = asyncio.create_task(warmup_and_maintain_market_cache())
+    print("[INFO] In-memory market RAM cache maintainer started")
     yield
+    cache_task.cancel()
     print("[INFO] Shutting down")
 
 
@@ -33,7 +40,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS + ["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

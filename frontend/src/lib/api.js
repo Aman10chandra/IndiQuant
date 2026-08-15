@@ -7,6 +7,22 @@ const API_BASE = import.meta.env.VITE_API_URL || (
     : ''
 );
 
+// High-speed client-side SWR cache & in-flight request deduplicator
+const CLIENT_CACHE = new Map();
+const IN_FLIGHT = new Map();
+
+function getCached(key, ttlMs = 45000) {
+  const item = CLIENT_CACHE.get(key);
+  if (item && (Date.now() - item.ts) < ttlMs) {
+    return item.data;
+  }
+  return null;
+}
+
+function setCached(key, data) {
+  CLIENT_CACHE.set(key, { data, ts: Date.now() });
+}
+
 // ─── Indian Equities Reference Data ──────────────────────────────────────────
 export const INDIAN_STOCKS_DATA = {
   RELIANCE: { name: 'Reliance Industries Ltd.', sector: 'Energy / Conglomerate', price: 1310.00, prev_close: 1317.00, pe: 24.5, pb: 2.1, eps: 53.4, de: 0.38, roe: 0.095, rev_g: 0.112, earn_g: 0.098, mcap: 17700000000000 },
@@ -200,73 +216,134 @@ async function apiFetch(path, options = {}) {
 
 export const getQuote = async (ticker) => {
   const cleanT = (ticker || '').toUpperCase().replace('.NS', '').replace('.BO', '');
+  const cacheKey = `quote:${cleanT}`;
+  const cached = getCached(cacheKey, 45000);
+  if (cached) return cached;
+
+  if (IN_FLIGHT.has(cacheKey)) return IN_FLIGHT.get(cacheKey);
+
+  const fetchPromise = (async () => {
+    try {
+      const res = await apiFetch(`/api/market/quote/${cleanT}`);
+      if (res && res.price) {
+        setCached(cacheKey, res);
+        return res;
+      }
+    } catch { /* fall back */ }
+
+    const ref = INDIAN_STOCKS_DATA[cleanT] || {
+      name: `${cleanT} Ltd.`,
+      price: 500.0,
+      prev_close: 495.0,
+      mcap: 400000000000,
+    };
+    const change = ref.price - ref.prev_close;
+    const changePct = ref.prev_close ? (change / ref.prev_close) * 100 : 0.0;
+
+    const fallbackQuote = {
+      ticker: cleanT,
+      name: ref.name,
+      price: Number(ref.price.toFixed(2)),
+      prev_close: Number(ref.prev_close.toFixed(2)),
+      change: Number(change.toFixed(2)),
+      change_pct: Number(changePct.toFixed(2)),
+      volume: 2450000,
+      market_cap: ref.mcap || 500000000000,
+      day_high: Number((ref.price * 1.012).toFixed(2)),
+      day_low: Number((ref.price * 0.988).toFixed(2)),
+      week_52_high: Number((ref.price * 1.28).toFixed(2)),
+      week_52_low: Number((ref.price * 0.78).toFixed(2)),
+      currency: 'INR',
+    };
+    setCached(cacheKey, fallbackQuote);
+    return fallbackQuote;
+  })();
+
+  IN_FLIGHT.set(cacheKey, fetchPromise);
   try {
-    const res = await apiFetch(`/api/market/quote/${cleanT}`);
-    if (res && res.price) return res;
-  } catch { /* fall back */ }
-
-  const ref = INDIAN_STOCKS_DATA[cleanT] || {
-    name: `${cleanT} Ltd.`,
-    price: 500.0,
-    prev_close: 495.0,
-    mcap: 400000000000,
-  };
-  const change = ref.price - ref.prev_close;
-  const changePct = ref.prev_close ? (change / ref.prev_close) * 100 : 0.0;
-
-  return {
-    ticker: cleanT,
-    name: ref.name,
-    price: Number(ref.price.toFixed(2)),
-    prev_close: Number(ref.prev_close.toFixed(2)),
-    change: Number(change.toFixed(2)),
-    change_pct: Number(changePct.toFixed(2)),
-    volume: 2450000,
-    market_cap: ref.mcap || 500000000000,
-    day_high: Number((ref.price * 1.012).toFixed(2)),
-    day_low: Number((ref.price * 0.988).toFixed(2)),
-    week_52_high: Number((ref.price * 1.28).toFixed(2)),
-    week_52_low: Number((ref.price * 0.78).toFixed(2)),
-    currency: 'INR',
-  };
+    const result = await fetchPromise;
+    return result;
+  } finally {
+    IN_FLIGHT.delete(cacheKey);
+  }
 };
 
 export const getBatchQuotes = async (tickers) => {
+  const cacheKey = `batch:${tickers.join(',')}`;
+  const cached = getCached(cacheKey, 30000);
+  if (cached) return cached;
+
   try {
     const res = await apiFetch(`/api/market/quotes?tickers=${tickers.join(',')}`);
-    if (res?.quotes) return res;
+    if (res?.quotes) {
+      setCached(cacheKey, res);
+      return res;
+    }
   } catch { /* fall back */ }
 
   const quotes = await Promise.all(tickers.map(t => getQuote(t)));
-  return { quotes };
+  const result = { quotes };
+  setCached(cacheKey, result);
+  return result;
 };
 
 export const getHistory = async (ticker, period = '3mo') => {
+  const cleanT = (ticker || '').toUpperCase();
   const normP = normalizePeriod(period);
-  // 1. Try Backend
-  try {
-    const res = await apiFetch(`/api/market/history/${ticker}?period=${normP}`);
-    if (res?.data?.length) return res;
-  } catch { /* fall back to direct live feed */ }
+  const cacheKey = `hist:${cleanT}:${normP}`;
+  const cached = getCached(cacheKey, 60000);
+  if (cached) return cached;
 
-  // 2. Try Direct Live Yahoo Finance Proxy
-  try {
-    const directData = await fetchDirectLiveYahooHistory(ticker, normP);
-    if (directData && directData.length) {
-      return { ticker: ticker.toUpperCase(), period: normP, data: directData };
-    }
-  } catch { /* fall back to deterministic candles */ }
+  if (IN_FLIGHT.has(cacheKey)) return IN_FLIGHT.get(cacheKey);
 
-  // 3. Guaranteed Unique Real-Time Candle Structure
-  const fallbackData = generateRealisticStockCandles(ticker, normP);
-  return { ticker: ticker.toUpperCase(), period: normP, data: fallbackData };
+  const fetchPromise = (async () => {
+    // 1. Try Backend
+    try {
+      const res = await apiFetch(`/api/market/history/${ticker}?period=${normP}`);
+      if (res?.data?.length) {
+        setCached(cacheKey, res);
+        return res;
+      }
+    } catch { /* fall back to direct live feed */ }
+
+    // 2. Try Direct Live Yahoo Finance Proxy
+    try {
+      const directData = await fetchDirectLiveYahooHistory(ticker, normP);
+      if (directData && directData.length) {
+        const res = { ticker: cleanT, period: normP, data: directData };
+        setCached(cacheKey, res);
+        return res;
+      }
+    } catch { /* fall back to deterministic candles */ }
+
+    // 3. Guaranteed Unique Real-Time Candle Structure
+    const fallbackData = generateRealisticStockCandles(ticker, normP);
+    const res = { ticker: cleanT, period: normP, data: fallbackData };
+    setCached(cacheKey, res);
+    return res;
+  })();
+
+  IN_FLIGHT.set(cacheKey, fetchPromise);
+  try {
+    const result = await fetchPromise;
+    return result;
+  } finally {
+    IN_FLIGHT.delete(cacheKey);
+  }
 };
 
 export const getFundamentals = async (ticker) => {
   const cleanT = (ticker || '').toUpperCase().replace('.NS', '').replace('.BO', '');
+  const cacheKey = `fund:${cleanT}`;
+  const cached = getCached(cacheKey, 120000);
+  if (cached) return cached;
+
   try {
     const res = await apiFetch(`/api/market/fundamentals/${cleanT}`);
-    if (res && res.ticker) return res;
+    if (res && res.ticker) {
+      setCached(cacheKey, res);
+      return res;
+    }
   } catch { /* fall back */ }
 
   const ref = INDIAN_STOCKS_DATA[cleanT] || {
@@ -282,7 +359,7 @@ export const getFundamentals = async (ticker) => {
     mcap: 500000000000,
   };
 
-  return {
+  const fallback = {
     ticker: cleanT,
     name: ref.name,
     sector: ref.sector || 'NSE Equities',
@@ -299,17 +376,26 @@ export const getFundamentals = async (ticker) => {
     beta: 1.05,
     description: `${ref.name} is one of India's leading publicly traded companies on the National Stock Exchange (NSE) and Bombay Stock Exchange (BSE), exhibiting solid balance sheet health and consistent market execution.`,
   };
+  setCached(cacheKey, fallback);
+  return fallback;
 };
 
 export const getNews = async (ticker, count = 5) => {
   const cleanT = (ticker || '').toUpperCase().replace('.NS', '').replace('.BO', '');
+  const cacheKey = `news:${cleanT}:${count}`;
+  const cached = getCached(cacheKey, 120000);
+  if (cached) return cached;
+
   try {
     const res = await apiFetch(`/api/market/news/${cleanT}?count=${count}`);
-    if (res?.articles?.length) return res;
+    if (res?.articles?.length) {
+      setCached(cacheKey, res);
+      return res;
+    }
   } catch { /* fall back */ }
 
   const compName = INDIAN_STOCKS_DATA[cleanT]?.name || `${cleanT} Ltd.`;
-  return {
+  const fallback = {
     ticker: cleanT,
     articles: [
       {
@@ -335,17 +421,26 @@ export const getNews = async (ticker, count = 5) => {
       },
     ],
   };
+  setCached(cacheKey, fallback);
+  return fallback;
 };
 
 export const getIndicators = async (ticker, indicator = 'ALL') => {
   const cleanT = (ticker || '').toUpperCase().replace('.NS', '').replace('.BO', '');
+  const cacheKey = `ind:${cleanT}:${indicator}`;
+  const cached = getCached(cacheKey, 60000);
+  if (cached) return cached;
+
   try {
     const res = await apiFetch(`/api/market/indicators/${cleanT}?indicator=${indicator}`);
-    if (res?.value) return res;
+    if (res?.value) {
+      setCached(cacheKey, res);
+      return res;
+    }
   } catch { /* fall back */ }
 
   const p = INDIAN_STOCKS_DATA[cleanT]?.price || 1000.0;
-  return {
+  const fallback = {
     ticker: cleanT,
     indicator,
     value: {
@@ -359,20 +454,31 @@ export const getIndicators = async (ticker, indicator = 'ALL') => {
       current_price: p,
     },
   };
+  setCached(cacheKey, fallback);
+  return fallback;
 };
 
 export const getMarketSummary = async () => {
+  const cacheKey = 'market_summary';
+  const cached = getCached(cacheKey, 30000);
+  if (cached) return cached;
+
   try {
     const res = await apiFetch('/api/market/market-summary');
-    if (res && res.NIFTY50) return res;
+    if (res && res.NIFTY50) {
+      setCached(cacheKey, res);
+      return res;
+    }
   } catch { /* fall back */ }
 
-  return {
+  const fallback = {
     NIFTY50: { value: 24366.00, change: -29.80, change_pct: -0.12 },
     SENSEX: { value: 78009.25, change: -70.75, change_pct: -0.09 },
     NIFTY_BANK: { value: 52635.25, change: 240.10, change_pct: 0.46 },
     NIFTY_IT: { value: 38453.90, change: 190.50, change_pct: 0.50 },
   };
+  setCached(cacheKey, fallback);
+  return fallback;
 };
 
 export const getWatchlist = async () => {

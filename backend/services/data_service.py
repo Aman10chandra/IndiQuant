@@ -67,6 +67,50 @@ FALLBACK_QUOTES = {
 }
 
 
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import time
+import asyncio
+
+# Persistent connection pool with keep-alive
+_session = requests.Session()
+_retries = Retry(total=2, backoff_factor=0.2, status_forcelist=[500, 502, 503, 504])
+_adapter = HTTPAdapter(pool_connections=30, pool_maxsize=30, max_retries=_retries)
+_session.mount("https://", _adapter)
+_session.mount("http://", _adapter)
+_session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+})
+
+# In-Memory RAM Cache for ultra-fast <5ms lookups
+_FAST_RAM_CACHE = {}
+
+def get_ram_cached(key: str, ttl_seconds: int = 45):
+    item = _FAST_RAM_CACHE.get(key)
+    if item and (time.time() - item["ts"]) < ttl_seconds:
+        return item["data"]
+    return None
+
+def set_ram_cached(key: str, data):
+    _FAST_RAM_CACHE[key] = {"data": data, "ts": time.time()}
+
+async def warmup_and_maintain_market_cache():
+    """Background daemon task that keeps key Indian market quotes & indices warm in RAM."""
+    key_tickers = ["^NSEI", "^BSESN", "TCS", "RELIANCE", "INFY", "HDFCBANK", "WIPRO", "BAJFINANCE", "SBIN", "ITC", "TATAMOTORS", "ONGC", "MARUTI"]
+    while True:
+        try:
+            for t in key_tickers:
+                try:
+                    q = get_quote(t)
+                    set_ram_cached(f"quote:{t.upper()}", q)
+                except Exception:
+                    pass
+                await asyncio.sleep(0.3)
+        except Exception:
+            pass
+        await asyncio.sleep(45)
+
 # ─── NSE Ticker normalizer ────────────────────────────────────────────────────
 
 def normalize_ticker(ticker: str) -> str:
@@ -87,10 +131,9 @@ def normalize_ticker(ticker: str) -> str:
 
 def _fetch_yahoo_quote_meta(ticker: str) -> dict:
     t = normalize_ticker(ticker)
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=1d&interval=1d"
-        resp = requests.get(url, headers=headers, timeout=5)
+        resp = _session.get(url, timeout=4)
         if resp.ok:
             meta = resp.json().get("chart", {}).get("result", [{}])[0].get("meta", {})
             price = float(meta.get("regularMarketPrice") or meta.get("chartPreviousClose") or 0.0)
@@ -113,8 +156,12 @@ def _fetch_yahoo_quote_meta(ticker: str) -> dict:
 @cached("quote")
 def get_quote(ticker: str) -> dict:
     raw_ticker = ticker.upper().replace(".NS", "").replace(".BO", "")
+    cache_key = f"quote:{raw_ticker}"
+    cached_val = get_ram_cached(cache_key, ttl_seconds=40)
+    if cached_val:
+        return cached_val
+
     t = normalize_ticker(ticker)
-    
     meta = _fetch_yahoo_quote_meta(t)
     price = meta.get("price", 0.0)
     prev_close = meta.get("prev_close", 0.0)
@@ -146,7 +193,7 @@ def get_quote(ticker: str) -> dict:
     change_pct = (change / prev_close * 100) if prev_close else 0.0
     name = TICKER_NAMES.get(raw_ticker, fallback.get("name", f"{raw_ticker} Ltd."))
 
-    return {
+    res = {
         "ticker": raw_ticker,
         "name": name,
         "price": round(price, 2),
@@ -161,6 +208,8 @@ def get_quote(ticker: str) -> dict:
         "week_52_low": round(price * 0.8, 2),
         "currency": "INR",
     }
+    set_ram_cached(cache_key, res)
+    return res
 
 
 # ─── Period Normalizer ────────────────────────────────────────────────────────
@@ -197,14 +246,9 @@ def _fetch_yahoo_chart_api(ticker: str, period: str = "3mo") -> list[dict]:
     r_val = range_map.get(norm_p, "3mo")
     i_val = interval_map.get(norm_p, "1d")
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-    }
-
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range={r_val}&interval={i_val}"
     try:
-        resp = requests.get(url, headers=headers, timeout=6)
+        resp = _session.get(url, timeout=4)
         if resp.ok:
             body = resp.json()
             results_arr = body.get("chart", {}).get("result", [])
@@ -215,7 +259,7 @@ def _fetch_yahoo_chart_api(ticker: str, period: str = "3mo") -> list[dict]:
                 # If 1d was empty (e.g. weekend / closed market), load 5d
                 if norm_p == "1d" and not timestamps:
                     url_5d = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=5d&interval=15m"
-                    r5 = requests.get(url_5d, headers=headers, timeout=5)
+                    r5 = _session.get(url_5d, timeout=4)
                     if r5.ok:
                         d5 = r5.json().get("chart", {}).get("result", [])
                         if d5:
@@ -249,6 +293,7 @@ def _fetch_yahoo_chart_api(ticker: str, period: str = "3mo") -> list[dict]:
                         "close": round(float(c), 2),
                         "volume": int(v),
                     })
+
                 if points:
                     return points
     except Exception:
@@ -259,11 +304,17 @@ def _fetch_yahoo_chart_api(ticker: str, period: str = "3mo") -> list[dict]:
 
 @cached("history")
 def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
+    raw_ticker = ticker.upper().replace(".NS", "").replace(".BO", "")
     norm_p = normalize_period(period)
+    cache_key = f"hist:{raw_ticker}:{norm_p}"
+    cached_val = get_ram_cached(cache_key, ttl_seconds=60)
+    if cached_val:
+        return cached_val
 
     # 1. First priority: Direct Live Yahoo Finance Chart API
     direct_pts = _fetch_yahoo_chart_api(ticker, norm_p)
     if direct_pts:
+        set_ram_cached(cache_key, direct_pts)
         return direct_pts
 
     # 2. Second priority: yfinance library
