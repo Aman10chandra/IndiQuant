@@ -83,32 +83,6 @@ export default function StockDetail() {
     return unsubscribe;
   }, [ticker, period]);
 
-function generateFallbackStockHistory(ticker = 'STOCK', basePrice = 500, period = '3mo') {
-  const points = period === '1d' ? 24 : period === '5d' ? 30 : period === '1mo' ? 30 : period === '3mo' ? 60 : 90;
-  const volatility = (basePrice || 500) * 0.015;
-  const result = [];
-  const now = new Date();
-  
-  for (let i = 0; i < points; i++) {
-    const cycle = Math.sin(i * 0.35) * volatility + Math.cos(i * 0.15) * (volatility * 0.6);
-    const trend = (i / points) * (volatility * 1.5);
-    const close = Math.max(10, (basePrice || 500) - volatility + trend + cycle);
-    const d = new Date(now.getTime() - (points - i) * (period === '1d' ? 15 * 60000 : 24 * 3600000));
-    result.push({
-      date: period === '1d' ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toISOString().slice(0, 10),
-      open: close - volatility * 0.3,
-      high: close + volatility * 0.6,
-      low: close - volatility * 0.6,
-      close: close,
-      volume: 800000 + Math.floor(Math.random() * 400000),
-    });
-  }
-  if (result.length > 0) {
-    result[result.length - 1].close = basePrice || 500;
-  }
-  return result;
-}
-
 function generateFallbackStockNews(ticker = 'STOCK', name = '') {
   const compName = name || `${ticker} Ltd.`;
   return [
@@ -136,6 +110,8 @@ function generateFallbackStockNews(ticker = 'STOCK', name = '') {
   ];
 }
 
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   const loadData = useCallback(async () => {
     if (!ticker) return;
     
@@ -144,31 +120,21 @@ function generateFallbackStockNews(ticker = 'STOCK', name = '') {
       .then(q => {
         if (q) setQuote(q);
       })
-      .catch(() => {
-        setQuote({
-          ticker: ticker.toUpperCase(),
-          name: `${ticker.toUpperCase()} Ltd.`,
-          price: 320.50,
-          prev_close: 318.00,
-          change: 2.50,
-          change_pct: 0.78,
-          day_high: 324.00,
-          day_low: 316.50,
-          market_cap: 400000000000,
-        });
-      });
+      .catch(() => {});
 
-    // 2. Price History
+    // 2. Price History (Real live time-series)
+    setHistoryLoading(true);
     getHistory(ticker, period)
       .then(h => {
         if (h?.data?.length) {
           setHistory(h.data);
-        } else {
-          setHistory(generateFallbackStockHistory(ticker, quote?.price || 320, period));
         }
       })
-      .catch(() => {
-        setHistory(generateFallbackStockHistory(ticker, quote?.price || 320, period));
+      .catch(err => {
+        console.error('History fetch error:', err);
+      })
+      .finally(() => {
+        setHistoryLoading(false);
       });
 
     // 3. Fundamentals
@@ -196,20 +162,11 @@ function generateFallbackStockNews(ticker = 'STOCK', name = '') {
       .then(ind => {
         if (ind?.value) setIndicators(ind.value);
       })
-      .catch(() => {
-        setIndicators({
-          rsi: 54.2,
-          sma_20: quote?.price ? quote.price * 0.98 : 315.0,
-          sma_50: quote?.price ? quote.price * 0.96 : 308.0,
-          macd: 1.45,
-          signal: 1.10,
-          macd_histogram: 0.35,
-          volume_ratio: 1.12,
-        });
-      });
+      .catch(() => {});
   }, [ticker, period]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
 
 
   const loadAiSummary = async () => {
@@ -320,14 +277,27 @@ function generateFallbackStockNews(ticker = 'STOCK', name = '') {
           <div className="card-header">
             <div className="card-title">Price Chart (OHLCV)</div>
             <div className="period-selector">
-              {['1d', '5d', '1mo', '3mo', '6mo', '1y'].map(p => (
-                <button key={p} className={`period-btn ${period === p ? 'active' : ''}`} onClick={() => setPeriod(p)}>
-                  {p}
+              {[
+                { id: '1d', label: '1D' },
+                { id: '5d', label: '5D' },
+                { id: '1mo', label: '1M' },
+                { id: '3mo', label: '3M' },
+                { id: '6mo', label: '6M' },
+                { id: '1y', label: '1Y' },
+                { id: '5y', label: '5Y' },
+              ].map(p => (
+                <button
+                  key={p.id}
+                  className={`period-btn ${period === p.id ? 'active' : ''}`}
+                  onClick={() => setPeriod(p.id)}
+                >
+                  {p.label}
                 </button>
               ))}
             </div>
           </div>
-          <StockChart data={history} ticker={ticker || ''} height={320} />
+          <StockChart data={history} ticker={ticker || ''} height={320} loading={historyLoading} />
+
         </div>
 
         {/* Tabs: Overview | AI Fundamentals | Technicals | News */}

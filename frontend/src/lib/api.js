@@ -1,10 +1,33 @@
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = import.meta.env.VITE_API_URL || (
+  typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+    ? 'https://indiquant-backend.onrender.com'
+    : ''
+);
 
 async function apiFetch(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  let url = `${API_BASE}${path}`;
+  let res = await fetch(url, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...options.headers },
   });
+
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    // If we received an HTML fallback (e.g. index.html from SPA routing), attempt direct backend query
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      try {
+        const directRes = await fetch(`https://indiquant-backend.onrender.com${path}`, {
+          ...options,
+          headers: { 'Content-Type': 'application/json', ...options.headers },
+        });
+        if (directRes.ok && (directRes.headers.get('content-type') || '').includes('application/json')) {
+          return directRes.json();
+        }
+      } catch { /* ignore */ }
+    }
+    throw new Error(`Non-JSON response received from ${path}`);
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || 'API error');

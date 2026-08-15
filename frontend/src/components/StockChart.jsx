@@ -1,23 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
-export default function StockChart({ data = [], ticker, height = 320 }) {
+export default function StockChart({ data = [], ticker, height = 320, loading = false }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [tooltip, setTooltip] = useState(null);
   const [dimensions, setDimensions] = useState({ width: 800, height });
 
-  const chartData = data?.length ? data : Array.from({ length: 30 }, (_, i) => {
-    const base = 500;
-    const val = base + Math.sin(i * 0.4) * 15 + i * 0.8;
-    return {
-      date: `2026-08-${i + 1}`,
-      open: val - 2,
-      high: val + 5,
-      low: val - 4,
-      close: val,
-      volume: 1000000,
-    };
-  });
+  const chartData = data && Array.isArray(data) ? data : [];
+
 
   useEffect(() => {
     const observer = new ResizeObserver(entries => {
@@ -148,7 +138,17 @@ export default function StockChart({ data = [], ticker, height = 320 }) {
     setTooltip({ x: mouseX, y: e.clientY - rect.top, point: chartData[clampedIdx] });
   };
 
+  if (!chartData.length) {
+    return (
+      <div style={{ height, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+        <div className="spinner" />
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Loading live market candles for {ticker || 'stock'}...</span>
+      </div>
+    );
+  }
+
   const isUp = chartData[chartData.length - 1].close >= chartData[0].close;
+
 
 
 

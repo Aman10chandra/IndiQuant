@@ -163,11 +163,29 @@ def get_quote(ticker: str) -> dict:
     }
 
 
+# ─── Period Normalizer ────────────────────────────────────────────────────────
+
+def normalize_period(period: str) -> str:
+    """Normalize any period string like '6m', '1day', '1yr', '5y' to Yahoo Finance API range."""
+    p = (period or "3mo").lower().strip()
+    mapping = {
+        "1d": "1d", "1day": "1d", "day": "1d", "today": "1d", "intraday": "1d",
+        "5d": "5d", "5day": "5d", "5days": "5d", "1w": "5d", "1week": "5d",
+        "1m": "1mo", "1mo": "1mo", "1month": "1mo",
+        "3m": "3mo", "3mo": "3mo", "3month": "3mo", "3months": "3mo",
+        "6m": "6mo", "6mo": "6mo", "6month": "6mo", "6months": "6mo",
+        "1y": "1y", "1yr": "1y", "1year": "1y", "ytd": "1y",
+        "5y": "5y", "5yr": "5y", "5year": "5y", "all": "5y", "max": "5y",
+    }
+    return mapping.get(p, "3mo")
+
+
 # ─── Price History ────────────────────────────────────────────────────────────
 
 def _fetch_yahoo_chart_api(ticker: str, period: str = "3mo") -> list[dict]:
     """Fetch real live OHLCV time-series directly from Yahoo Finance v8 chart API."""
     t = normalize_ticker(ticker)
+    norm_p = normalize_period(period)
     range_map = {
         "1d": "1d", "5d": "5d", "1mo": "1mo",
         "3mo": "3mo", "6mo": "6mo", "1y": "1y", "5y": "5y",
@@ -176,8 +194,8 @@ def _fetch_yahoo_chart_api(ticker: str, period: str = "3mo") -> list[dict]:
         "1d": "5m", "5d": "15m", "1mo": "1d",
         "3mo": "1d", "6mo": "1d", "1y": "1d", "5y": "1wk",
     }
-    r_val = range_map.get(period, "1mo")
-    i_val = interval_map.get(period, "1d")
+    r_val = range_map.get(norm_p, "3mo")
+    i_val = interval_map.get(norm_p, "1d")
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -195,7 +213,7 @@ def _fetch_yahoo_chart_api(ticker: str, period: str = "3mo") -> list[dict]:
                 timestamps = data.get("timestamp", [])
                 
                 # If 1d was empty (e.g. weekend / closed market), load 5d
-                if period == "1d" and not timestamps:
+                if norm_p == "1d" and not timestamps:
                     url_5d = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=5d&interval=15m"
                     r5 = requests.get(url_5d, headers=headers, timeout=5)
                     if r5.ok:
@@ -241,8 +259,10 @@ def _fetch_yahoo_chart_api(ticker: str, period: str = "3mo") -> list[dict]:
 
 @cached("history")
 def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
+    norm_p = normalize_period(period)
+
     # 1. First priority: Direct Live Yahoo Finance Chart API
-    direct_pts = _fetch_yahoo_chart_api(ticker, period)
+    direct_pts = _fetch_yahoo_chart_api(ticker, norm_p)
     if direct_pts:
         return direct_pts
 
@@ -252,9 +272,9 @@ def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
         "1d": "5m", "5d": "15m", "1mo": "1d",
         "3mo": "1d", "6mo": "1d", "1y": "1d", "5y": "1wk",
     }
-    interval = interval_map.get(period, "1d")
+    interval = interval_map.get(norm_p, "1d")
     try:
-        hist = yf.Ticker(t).history(period=period, interval=interval)
+        hist = yf.Ticker(t).history(period=norm_p, interval=interval)
         result = []
         for date, row in hist.iterrows():
             result.append({
@@ -269,6 +289,7 @@ def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
             return result
     except Exception:
         pass
+
 
     # 3. Emergency fallback if internet is completely down
     raw = ticker.upper().replace(".NS", "").replace(".BO", "")
