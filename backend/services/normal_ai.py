@@ -3,23 +3,38 @@ Normal AI Service — single-shot Gemini calls for all four fixed-pipeline featu
 Each function: fetch data → format prompt → one Gemini call → return structured response.
 """
 import os
+from pathlib import Path
 import google.generativeai as genai
 from dotenv import load_dotenv
+
+# Ensure .env is loaded regardless of current working directory
+_backend_env = Path(__file__).resolve().parent.parent / ".env"
+if _backend_env.exists():
+    load_dotenv(_backend_env)
+load_dotenv()
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
+if GEMINI_API_KEY:
+    os.environ["GOOGLE_API_KEY"] = GEMINI_API_KEY
+    os.environ["GEMINI_API_KEY"] = GEMINI_API_KEY
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+    except Exception:
+        pass
+
 from services.data_service import get_fundamentals, get_price_history, compute_indicator, get_news, normalize_ticker
 from datetime import datetime
 
-load_dotenv()
-
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 DISCLAIMER = "Notice: This analysis is for educational purposes only and is not investment advice. Always do your own research."
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    _model_names = ["gemini-flash-latest", "gemini-pro-latest", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
-    _model = genai.GenerativeModel("gemini-flash-latest")
-else:
-    _model_names = []
-    _model = None
+_model_names = [
+    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash",
+    "gemini-3.7-flash",
+    "gemini-flash-latest",
+    "gemini-pro-latest",
+]
 
 
 def _call_gemini(prompt: str) -> str:
@@ -27,7 +42,14 @@ def _call_gemini(prompt: str) -> str:
         return ""
     
     # Try working models in sequence
-    for m_name in ["gemini-flash-latest", "gemini-pro-latest", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
+    for m_name in [
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-3.5-flash",
+        "gemini-3.7-flash",
+        "gemini-flash-latest",
+        "gemini-pro-latest",
+    ]:
         try:
             m = genai.GenerativeModel(m_name)
             response = m.generate_content(prompt)

@@ -185,7 +185,7 @@ FALLBACK_INDICES = {
 @cached("quote")
 async def market_summary():
     """NIFTY 50 and SENSEX summary with ultra-fast RAM cache."""
-    from services.data_service import get_ram_cached, set_ram_cached, _fetch_yahoo_quote_meta
+    from services.data_service import get_ram_cached, set_ram_cached, get_quote
     
     cached_summary = get_ram_cached("market_summary", ttl_seconds=30)
     if cached_summary:
@@ -198,9 +198,9 @@ async def market_summary():
         name, symbol = pair
         fb = FALLBACK_INDICES.get(name, {"value": 24000.0, "change": 0.0, "change_pct": 0.0})
         try:
-            meta = _fetch_yahoo_quote_meta(symbol)
-            curr = meta.get("price", 0.0)
-            prev = meta.get("prev_close", 0.0)
+            q = get_quote(symbol)
+            curr = q.get("price", 0.0)
+            prev = q.get("prev_close", 0.0)
             if not curr or not prev:
                 curr = fb["value"]
                 prev = curr - fb["change"]
@@ -217,4 +217,5 @@ async def market_summary():
     res_dict = dict(results)
     set_ram_cached("market_summary", res_dict)
     return res_dict
+
 

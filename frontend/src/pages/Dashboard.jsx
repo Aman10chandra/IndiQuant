@@ -8,9 +8,9 @@ const DEFAULT_WATCHLIST_ITEMS = [
   { id: '1', ticker: 'TCS', name: 'Tata Consultancy Services', price: 2361.00, change: -14.00, change_pct: -0.59, status: 'Process', sector: 'IT Services', time: '11 mins ago' },
   { id: '2', ticker: 'RELIANCE', name: 'Reliance Industries', price: 1310.00, change: -7.00, change_pct: -0.53, status: 'Process', sector: 'Energy & Retail', time: '32 mins ago' },
   { id: '3', ticker: 'INFY', name: 'Infosys Limited', price: 1169.20, change: -5.80, change_pct: -0.49, status: 'Process', sector: 'IT Services', time: '1 hour ago' },
-  { id: '4', ticker: 'HDFCBANK', name: 'HDFC Bank Limited', price: 1640.10, change: 8.10, change_pct: 0.50, status: 'Bullish', sector: 'Banking', time: '3 hours ago' },
-  { id: '5', ticker: 'WIPRO', name: 'Wipro Limited', price: 520.40, change: 2.40, change_pct: 0.46, status: 'Bullish', sector: 'IT Services', time: '5 hours ago' },
-  { id: '6', ticker: 'BAJFINANCE', name: 'Bajaj Finance', price: 6850.00, change: 50.00, change_pct: 0.74, status: 'Bullish', sector: 'Financials', time: '1 day ago' },
+  { id: '4', ticker: 'HDFCBANK', name: 'HDFC Bank Limited', price: 727.00, change: 2.00, change_pct: 0.28, status: 'Bullish', sector: 'Banking', time: '3 hours ago' },
+  { id: '5', ticker: 'WIPRO', name: 'Wipro Limited', price: 184.00, change: 0.90, change_pct: 0.49, status: 'Bullish', sector: 'IT Services', time: '5 hours ago' },
+  { id: '6', ticker: 'BAJFINANCE', name: 'Bajaj Finance', price: 1087.00, change: -3.80, change_pct: -0.35, status: 'Consolidate', sector: 'Financials', time: '1 day ago' },
 ];
 
 const DEFAULT_MARKET = {

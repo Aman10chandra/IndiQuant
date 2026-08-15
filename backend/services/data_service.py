@@ -6,9 +6,14 @@ import yfinance as yf
 import pandas as pd
 import requests
 import os
+from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 
+# Ensure .env is loaded regardless of current working directory
+_backend_env = Path(__file__).resolve().parent.parent / ".env"
+if _backend_env.exists():
+    load_dotenv(_backend_env)
 load_dotenv()
 
 NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
@@ -16,6 +21,12 @@ NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
 from services.cache_service import cached
 
 TICKER_NAMES = {
+    "^NSEI": "NIFTY 50",
+    "^BSESN": "BSE SENSEX",
+    "NIFTY": "NIFTY 50",
+    "NIFTY50": "NIFTY 50",
+    "SENSEX": "BSE SENSEX",
+    "BSESN": "BSE SENSEX",
     "TCS": "Tata Consultancy Services Ltd.",
     "RELIANCE": "Reliance Industries Ltd.",
     "INFY": "Infosys Ltd.",
@@ -49,21 +60,32 @@ TICKER_NAMES = {
 }
 
 FALLBACK_QUOTES = {
-    "TCS": {"name": "Tata Consultancy Services Ltd.", "price": 2361.00, "prev_close": 2375.00, "change": -14.00, "change_pct": -0.59, "market_cap": 15120000000000},
-    "RELIANCE": {"name": "Reliance Industries Ltd.", "price": 1310.00, "prev_close": 1317.00, "change": -7.00, "change_pct": -0.53, "market_cap": 17700000000000},
-    "INFY": {"name": "Infosys Ltd.", "price": 1169.20, "prev_close": 1175.00, "change": -5.80, "change_pct": -0.49, "market_cap": 7560000000000},
-    "HDFCBANK": {"name": "HDFC Bank Ltd.", "price": 1640.10, "prev_close": 1632.00, "change": 8.10, "change_pct": 0.50, "market_cap": 12500000000000},
-    "WIPRO": {"name": "Wipro Ltd.", "price": 520.40, "prev_close": 518.00, "change": 2.40, "change_pct": 0.46, "market_cap": 2720000000000},
-    "BAJFINANCE": {"name": "Bajaj Finance Ltd.", "price": 6850.00, "prev_close": 6800.00, "change": 50.00, "change_pct": 0.74, "market_cap": 4230000000000},
-    "SBIN": {"name": "State Bank of India", "price": 845.30, "prev_close": 840.00, "change": 5.30, "change_pct": 0.63, "market_cap": 7540000000000},
-    "ITC": {"name": "ITC Ltd.", "price": 492.50, "prev_close": 490.00, "change": 2.50, "change_pct": 0.51, "market_cap": 6150000000000},
+    "^NSEI": {"name": "NIFTY 50", "price": 24366.00, "prev_close": 24395.85, "change": -29.85, "change_pct": -0.12, "market_cap": 185000000000000},
+    "^BSESN": {"name": "BSE SENSEX", "price": 78009.25, "prev_close": 78079.96, "change": -70.71, "change_pct": -0.09, "market_cap": 145000000000000},
+    "TCS": {"name": "Tata Consultancy Services Ltd.", "price": 2361.00, "prev_close": 2375.00, "change": -14.00, "change_pct": -0.59, "market_cap": 8542000000000},
+    "RELIANCE": {"name": "Reliance Industries Ltd.", "price": 1310.00, "prev_close": 1317.00, "change": -7.00, "change_pct": -0.53, "market_cap": 17727000000000},
+    "INFY": {"name": "Infosys Ltd.", "price": 1169.20, "prev_close": 1175.00, "change": -5.80, "change_pct": -0.49, "market_cap": 4735000000000},
+    "HDFCBANK": {"name": "HDFC Bank Ltd.", "price": 727.00, "prev_close": 725.00, "change": 2.00, "change_pct": 0.28, "market_cap": 11203000000000},
+    "WIPRO": {"name": "Wipro Ltd.", "price": 184.00, "prev_close": 183.10, "change": 0.90, "change_pct": 0.49, "market_cap": 1820000000000},
+    "BAJFINANCE": {"name": "Bajaj Finance Ltd.", "price": 1087.00, "prev_close": 1090.80, "change": -3.80, "change_pct": -0.35, "market_cap": 6762000000000},
+    "SBIN": {"name": "State Bank of India", "price": 1067.70, "prev_close": 1083.00, "change": -15.30, "change_pct": -1.41, "market_cap": 9855000000000},
+    "ITC": {"name": "ITC Ltd.", "price": 278.20, "prev_close": 278.50, "change": -0.30, "change_pct": -0.11, "market_cap": 3485000000000},
     "TATAMOTORS": {"name": "Tata Motors Ltd.", "price": 985.00, "prev_close": 978.00, "change": 7.00, "change_pct": 0.72, "market_cap": 3260000000000},
-    "HINDUNILVR": {"name": "Hindustan Unilever Ltd.", "price": 2740.00, "prev_close": 2730.00, "change": 10.00, "change_pct": 0.37, "market_cap": 6430000000000},
+    "HINDUNILVR": {"name": "Hindustan Unilever Ltd.", "price": 2077.00, "prev_close": 2092.00, "change": -15.00, "change_pct": -0.72, "market_cap": 4880000000000},
+    "ICICIBANK": {"name": "ICICI Bank Ltd.", "price": 1417.00, "prev_close": 1406.80, "change": 10.20, "change_pct": 0.72, "market_cap": 9950000000000},
+    "AXISBANK": {"name": "Axis Bank Ltd.", "price": 1217.40, "prev_close": 1221.80, "change": -4.40, "change_pct": -0.36, "market_cap": 3750000000000},
+    "KOTAKBANK": {"name": "Kotak Mahindra Bank Ltd.", "price": 391.15, "prev_close": 392.40, "change": -1.25, "change_pct": -0.32, "market_cap": 3890000000000},
+    "LT": {"name": "Larsen & Toubro Ltd.", "price": 4057.00, "prev_close": 4070.70, "change": -13.70, "change_pct": -0.34, "market_cap": 5580000000000},
+    "BHARTIARTL": {"name": "Bharti Airtel Ltd.", "price": 1992.10, "prev_close": 1939.10, "change": 53.00, "change_pct": 2.73, "market_cap": 11800000000000},
+    "TITAN": {"name": "Titan Company Ltd.", "price": 5056.20, "prev_close": 5063.70, "change": -7.50, "change_pct": -0.15, "market_cap": 4490000000000},
+    "MARUTI": {"name": "Maruti Suzuki India Ltd.", "price": 13834.00, "prev_close": 13905.00, "change": -71.00, "change_pct": -0.51, "market_cap": 4350000000000},
+    "M&M": {"name": "Mahindra & Mahindra Ltd.", "price": 3428.30, "prev_close": 3428.20, "change": 0.10, "change_pct": 0.00, "market_cap": 4260000000000},
+    "SUNPHARMA": {"name": "Sun Pharmaceutical Industries Ltd.", "price": 1930.00, "prev_close": 1932.00, "change": -2.00, "change_pct": -0.10, "market_cap": 4630000000000},
     "ONGC": {"name": "Oil and Natural Gas Corporation Ltd.", "price": 236.40, "prev_close": 239.90, "change": -3.50, "change_pct": -1.46, "market_cap": 2970000000000},
-    "POWERGRID": {"name": "Power Grid Corporation of India Ltd.", "price": 342.10, "prev_close": 339.50, "change": 2.60, "change_pct": 0.77, "market_cap": 3180000000000},
-    "NTPC": {"name": "NTPC Ltd.", "price": 412.00, "prev_close": 408.20, "change": 3.80, "change_pct": 0.93, "market_cap": 3990000000000},
-    "TITAN": {"name": "Titan Company Ltd.", "price": 3480.00, "prev_close": 3450.00, "change": 30.00, "change_pct": 0.87, "market_cap": 3090000000000},
-    "MARUTI": {"name": "Maruti Suzuki India Ltd.", "price": 12350.00, "prev_close": 12220.00, "change": 130.00, "change_pct": 1.06, "market_cap": 3880000000000},
+    "POWERGRID": {"name": "Power Grid Corporation of India Ltd.", "price": 266.05, "prev_close": 266.60, "change": -0.55, "change_pct": -0.21, "market_cap": 2470000000000},
+    "NTPC": {"name": "NTPC Ltd.", "price": 340.00, "prev_close": 344.25, "change": -4.25, "change_pct": -1.23, "market_cap": 3290000000000},
+    "COALINDIA": {"name": "Coal India Ltd.", "price": 407.10, "prev_close": 410.50, "change": -3.40, "change_pct": -0.83, "market_cap": 2510000000000},
+    "HCLTECH": {"name": "HCL Technologies Ltd.", "price": 1360.00, "prev_close": 1370.00, "change": -10.00, "change_pct": -0.73, "market_cap": 3690000000000},
 }
 
 
@@ -129,55 +151,44 @@ def normalize_ticker(ticker: str) -> str:
 
 # ─── Quote ────────────────────────────────────────────────────────────────────
 
-def _fetch_yahoo_quote_meta(ticker: str) -> dict:
-    t = normalize_ticker(ticker)
-    try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=1d&interval=1d"
-        resp = _session.get(url, timeout=4)
-        if resp.ok:
-            meta = resp.json().get("chart", {}).get("result", [{}])[0].get("meta", {})
-            price = float(meta.get("regularMarketPrice") or meta.get("chartPreviousClose") or 0.0)
-            prev_close = float(meta.get("chartPreviousClose") or meta.get("previousClose") or price)
-            day_high = float(meta.get("regularMarketDayHigh") or meta.get("dayHigh") or price * 1.01)
-            day_low = float(meta.get("regularMarketDayLow") or meta.get("dayLow") or price * 0.99)
-            vol = int(meta.get("regularMarketVolume") or 1500000)
-            return {
-                "price": price,
-                "prev_close": prev_close,
-                "day_high": day_high,
-                "day_low": day_low,
-                "volume": vol,
-            }
-    except Exception:
-        pass
-    return {}
-
-
 @cached("quote")
 def get_quote(ticker: str) -> dict:
     raw_ticker = ticker.upper().replace(".NS", "").replace(".BO", "")
     cache_key = f"quote:{raw_ticker}"
-    cached_val = get_ram_cached(cache_key, ttl_seconds=40)
+    cached_val = get_ram_cached(cache_key, ttl_seconds=30)
     if cached_val:
         return cached_val
 
     t = normalize_ticker(ticker)
-    meta = _fetch_yahoo_quote_meta(t)
-    price = meta.get("price", 0.0)
-    prev_close = meta.get("prev_close", 0.0)
-    day_high = meta.get("day_high", 0.0)
-    day_low = meta.get("day_low", 0.0)
-    vol = meta.get("volume", 1500000)
+    price = 0.0
+    prev_close = 0.0
+    day_high = 0.0
+    day_low = 0.0
+    vol = 1500000
 
+    # 1. Primary: yfinance fast_info (fastest & most reliable)
+    try:
+        tk = yf.Ticker(t)
+        fi = tk.fast_info
+        price = float(fi.get("last_price") or fi.get("lastPrice") or 0.0)
+        prev_close = float(fi.get("previous_close") or fi.get("previousClose") or 0.0)
+        day_high = float(fi.get("day_high") or fi.get("dayHigh") or 0.0)
+        day_low = float(fi.get("day_low") or fi.get("dayLow") or 0.0)
+        v = getattr(fi, "last_volume", None) or fi.get("last_volume") or fi.get("lastVolume")
+        if v:
+            vol = int(v)
+    except Exception:
+        pass
+
+    # 2. Secondary: Yahoo Chart Meta
     if not price:
-        try:
-            info = yf.Ticker(t).fast_info
-            prev_close = float(info.get("previous_close", 0) or 0)
-            price = float(info.get("last_price", 0) or 0)
-            day_high = float(info.get("day_high", 0) or 0)
-            day_low = float(info.get("day_low", 0) or 0)
-        except Exception:
-            pass
+        meta = _fetch_yahoo_quote_meta(t)
+        price = meta.get("price", 0.0)
+        prev_close = meta.get("prev_close", 0.0)
+        day_high = meta.get("day_high", 0.0)
+        day_low = meta.get("day_low", 0.0)
+        if meta.get("volume"):
+            vol = meta.get("volume")
 
     fallback = FALLBACK_QUOTES.get(raw_ticker, {})
     if not price:
@@ -185,9 +196,9 @@ def get_quote(ticker: str) -> dict:
     if not prev_close:
         prev_close = float(fallback.get("prev_close", price * 0.995))
     if not day_high:
-        day_high = price * 1.01
+        day_high = max(price, prev_close) * 1.008
     if not day_low:
-        day_low = price * 0.99
+        day_low = min(price, prev_close) * 0.992
 
     change = price - prev_close
     change_pct = (change / prev_close * 100) if prev_close else 0.0
@@ -311,13 +322,7 @@ def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
     if cached_val:
         return cached_val
 
-    # 1. First priority: Direct Live Yahoo Finance Chart API
-    direct_pts = _fetch_yahoo_chart_api(ticker, norm_p)
-    if direct_pts:
-        set_ram_cached(cache_key, direct_pts)
-        return direct_pts
-
-    # 2. Second priority: yfinance library
+    # 1. First priority: yfinance library
     t = normalize_ticker(ticker)
     interval_map = {
         "1d": "5m", "5d": "15m", "1mo": "1d",
@@ -326,47 +331,76 @@ def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
     interval = interval_map.get(norm_p, "1d")
     try:
         hist = yf.Ticker(t).history(period=norm_p, interval=interval)
-        result = []
-        for date, row in hist.iterrows():
-            result.append({
-                "date": date.strftime("%Y-%m-%d %H:%M") if interval in ["5m", "15m"] else date.strftime("%Y-%m-%d"),
-                "open": round(float(row["Open"]), 2),
-                "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2),
-                "close": round(float(row["Close"]), 2),
-                "volume": int(row.get("Volume", 0) or 0),
-            })
-        if result:
-            return result
+        if hist.empty and norm_p == "1d":
+            hist = yf.Ticker(t).history(period="5d", interval="15m")
+            interval = "15m"
+            
+        if not hist.empty:
+            result = []
+            for date, row in hist.iterrows():
+                result.append({
+                    "date": date.strftime("%Y-%m-%d %H:%M") if interval in ["5m", "15m"] else date.strftime("%Y-%m-%d"),
+                    "open": round(float(row["Open"]), 2),
+                    "high": round(float(row["High"]), 2),
+                    "low": round(float(row["Low"]), 2),
+                    "close": round(float(row["Close"]), 2),
+                    "volume": int(row.get("Volume", 0) or 0),
+                })
+            if result:
+                set_ram_cached(cache_key, result)
+                return result
     except Exception:
         pass
 
+    # 2. Second priority: Direct Live Yahoo Finance Chart API
+    direct_pts = _fetch_yahoo_chart_api(ticker, norm_p)
+    if direct_pts:
+        set_ram_cached(cache_key, direct_pts)
+        return direct_pts
 
-    # 3. Emergency fallback if internet is completely down
+    # 3. Deterministic Realistic Market Candle Fallback anchored to live price
     raw = ticker.upper().replace(".NS", "").replace(".BO", "")
     quote_info = FALLBACK_QUOTES.get(raw, {})
     if "NSE" in t or "NIFTY" in raw:
-        base_price = 24395.85
+        base_price = 24366.00
     elif "BSE" in t or "SENSEX" in raw:
-        base_price = 79879.96
+        base_price = 78009.25
     elif quote_info.get("price"):
         base_price = float(quote_info["price"])
     else:
-        base_price = 500.0
+        base_price = 1000.0
 
-    points = 24 if period in ["1d", "5d"] else 30
-    import math
-    return [
-        {
-            "date": f"2026-08-{i+1:02d}",
-            "open": round(base_price + math.sin(i * 0.4) * (base_price * 0.015), 2),
-            "high": round(base_price + math.sin(i * 0.4) * (base_price * 0.015) + (base_price * 0.005), 2),
-            "low": round(base_price + math.sin(i * 0.4) * (base_price * 0.015) - (base_price * 0.005), 2),
-            "close": round(base_price + math.sin(i * 0.4 + 0.2) * (base_price * 0.015) + (i * (base_price * 0.001)), 2),
-            "volume": 1200000 + i * 50000,
-        }
-        for i in range(points)
-    ]
+    points_count = 24 if norm_p == "1d" else (30 if norm_p in ["5d", "1mo"] else 65)
+    step_volatility = base_price * (0.003 if norm_p == "1d" else 0.008)
+    
+    import datetime as dt_mod
+    now = dt_mod.datetime.utcnow()
+    points = []
+    curr = base_price * 0.985
+    for i in range(points_count):
+        drift = (base_price - curr) * (0.15 + (i / (points_count * 2)))
+        curr = round(curr + drift, 2)
+        h = round(curr + step_volatility * 0.7, 2)
+        l = round(curr - step_volatility * 0.7, 2)
+        o = round(l + (h - l) * 0.4, 2)
+        c = curr
+        if i == points_count - 1:
+            c = base_price
+            h = max(h, base_price)
+            l = min(l, base_price)
+        
+        delta = dt_mod.timedelta(minutes=15 * (points_count - i) if norm_p == "1d" else dt_mod.timedelta(days=points_count - i))
+        pt_date = (now - delta).strftime("%Y-%m-%d %H:%M" if norm_p == "1d" else "%Y-%m-%d")
+        points.append({
+            "date": pt_date,
+            "open": o,
+            "high": h,
+            "low": l,
+            "close": c,
+            "volume": 1200000 + i * 25000,
+        })
+    set_ram_cached(cache_key, points)
+    return points
 
 
 

@@ -35,16 +35,16 @@ const SEARCHABLE_INDIAN_STOCKS = [
 ];
 
 const STOCK_FALLBACK_INFO = {
-  TCS: { price: 4180.50, sector: 'INFORMATION TECHNOLOGY', change_pct: 1.20 },
-  RELIANCE: { price: 2980.20, sector: 'ENERGY / RETAIL', change_pct: -0.50 },
-  INFY: { price: 1820.00, sector: 'INFORMATION TECHNOLOGY', change_pct: 0.50 },
-  HDFCBANK: { price: 1640.10, sector: 'BANKING & FINANCE', change_pct: 0.50 },
-  WIPRO: { price: 520.40, sector: 'INFORMATION TECHNOLOGY', change_pct: 0.00 },
-  BAJFINANCE: { price: 6850.00, sector: 'FINANCIAL SERVICES', change_pct: 0.70 },
-  ICICIBANK: { price: 1195.40, sector: 'BANKING & FINANCE', change_pct: 0.80 },
-  TATAMOTORS: { price: 985.00, sector: 'AUTOMOTIVE', change_pct: -1.40 },
-  SBIN: { price: 845.30, sector: 'BANKING & FINANCE', change_pct: -0.40 },
-  HCLTECH: { price: 1640.80, sector: 'INFORMATION TECHNOLOGY', change_pct: 1.40 },
+  TCS: { price: 2361.00, sector: 'INFORMATION TECHNOLOGY', change_pct: -0.59 },
+  RELIANCE: { price: 1310.00, sector: 'ENERGY / RETAIL', change_pct: -0.53 },
+  INFY: { price: 1169.20, sector: 'INFORMATION TECHNOLOGY', change_pct: -0.49 },
+  HDFCBANK: { price: 727.00, sector: 'BANKING & FINANCE', change_pct: 0.28 },
+  WIPRO: { price: 184.00, sector: 'INFORMATION TECHNOLOGY', change_pct: 0.49 },
+  BAJFINANCE: { price: 1087.00, sector: 'FINANCIAL SERVICES', change_pct: -0.35 },
+  ICICIBANK: { price: 1417.00, sector: 'BANKING & FINANCE', change_pct: 0.72 },
+  TATAMOTORS: { price: 985.00, sector: 'AUTOMOTIVE', change_pct: 0.72 },
+  SBIN: { price: 1067.70, sector: 'BANKING & FINANCE', change_pct: -1.41 },
+  HCLTECH: { price: 1360.00, sector: 'INFORMATION TECHNOLOGY', change_pct: -0.73 },
 };
 
 export default function DigestPage() {
