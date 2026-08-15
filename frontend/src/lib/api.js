@@ -113,7 +113,7 @@ async function fetchDirectLiveYahooHistory(ticker, period) {
   }
 }
 
-// ─── Deterministic Stock-Specific Candle Generator ────────────────────────────
+// ─── Deterministic Realistic Financial Candle Generator ───────────────────────
 function generateRealisticStockCandles(ticker, period) {
   const cleanT = (ticker || 'STOCK').toUpperCase().replace('.NS', '').replace('.BO', '');
   const ref = INDIAN_STOCKS_DATA[cleanT] || { price: 1000.0, prev_close: 995.0 };
@@ -121,32 +121,48 @@ function generateRealisticStockCandles(ticker, period) {
   const normP = normalizePeriod(period);
 
   const pointsCount = normP === '1d' ? 24 : normP === '5d' ? 30 : normP === '1mo' ? 24 : normP === '3mo' ? 65 : normP === '6mo' ? 125 : normP === '1y' ? 245 : 260;
-  const volatility = basePrice * 0.012;
-  const seed = cleanT.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const volatility = basePrice * (normP === '1d' ? 0.003 : normP === '5d' ? 0.008 : 0.015);
+  
+  // Deterministic seed for reproducible realistic charts
+  let seed = cleanT.split('').reduce((acc, c, idx) => acc + c.charCodeAt(0) * (idx + 1) * 31, 1337);
+  function pseudoRandom() {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  }
 
   const result = [];
   const now = new Date();
   const stepMs = normP === '1d' ? 15 * 60000 : normP === '5d' ? 60 * 60000 : 24 * 3600000;
 
+  // Generate random walk starting from past price leading to basePrice
+  const startPrice = basePrice * (1 - (ref.change_pct || 0.5) / 100);
+  let currentPrice = startPrice;
+
   for (let i = 0; i < pointsCount; i++) {
-    const progress = i / pointsCount;
-    const wave = Math.sin((i + seed) * 0.25) * volatility + Math.cos((i + seed) * 0.12) * (volatility * 0.7);
-    const trend = (progress - 0.5) * (volatility * 2);
-    const c = Math.max(1, basePrice - (volatility * 0.8) + trend + wave);
+    const shock = (pseudoRandom() - 0.48) * volatility;
+    const meanReversion = ((startPrice + (basePrice - startPrice) * (i / pointsCount)) - currentPrice) * 0.15;
+    currentPrice = Math.max(1, currentPrice + shock + meanReversion);
+
+    const candleHigh = currentPrice + pseudoRandom() * volatility * 0.8;
+    const candleLow = Math.max(1, currentPrice - pseudoRandom() * volatility * 0.8);
+    const candleOpen = candleLow + pseudoRandom() * (candleHigh - candleLow);
+    const candleClose = currentPrice;
+
     const d = new Date(now.getTime() - (pointsCount - i) * stepMs);
 
     result.push({
       date: normP === '1d' ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toISOString().substring(0, 10),
-      open: Number((c - volatility * 0.3).toFixed(2)),
-      high: Number((c + volatility * 0.6).toFixed(2)),
-      low: Number((c - volatility * 0.6).toFixed(2)),
-      close: Number(c.toFixed(2)),
-      volume: 800000 + Math.floor(Math.random() * 500000),
+      open: Number(candleOpen.toFixed(2)),
+      high: Number(candleHigh.toFixed(2)),
+      low: Number(candleLow.toFixed(2)),
+      close: Number(candleClose.toFixed(2)),
+      volume: Math.floor(500000 + pseudoRandom() * 1500000),
     });
   }
 
   if (result.length > 0) {
     result[result.length - 1].close = basePrice;
+    result[result.length - 1].high = Math.max(result[result.length - 1].high, basePrice);
   }
   return result;
 }
