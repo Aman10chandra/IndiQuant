@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   getHistory,
+  REAL_NIFTY_1D_SERIES,
+  REAL_SENSEX_1D_SERIES,
   REAL_NIFTY_SERIES,
   REAL_SENSEX_SERIES,
   REAL_NIFTY_1Y_SERIES,
@@ -8,7 +10,14 @@ import {
 } from '../lib/api';
 import { useMarketStatus } from '../lib/marketStatus';
 
-export { REAL_NIFTY_SERIES, REAL_SENSEX_SERIES, REAL_NIFTY_1Y_SERIES, REAL_SENSEX_1Y_SERIES };
+export {
+  REAL_NIFTY_1D_SERIES,
+  REAL_SENSEX_1D_SERIES,
+  REAL_NIFTY_SERIES,
+  REAL_SENSEX_SERIES,
+  REAL_NIFTY_1Y_SERIES,
+  REAL_SENSEX_1Y_SERIES
+};
 
 export default function IndexMiniChart({
   symbol,
@@ -23,6 +32,9 @@ export default function IndexMiniChart({
   const [period, setPeriod] = useState(defaultPeriod);
   const isSensex = symbol.includes('BSESN') || symbol.includes('SENSEX');
   const [data, setData] = useState(() => {
+    if (defaultPeriod === '1d') {
+      return isSensex ? REAL_SENSEX_1D_SERIES : REAL_NIFTY_1D_SERIES;
+    }
     if (defaultPeriod === '1y') {
       return isSensex ? REAL_SENSEX_1Y_SERIES : REAL_NIFTY_1Y_SERIES;
     }
@@ -40,7 +52,9 @@ export default function IndexMiniChart({
     setLoading(true);
 
     // Immediately set appropriate baseline series
-    if (period === '1y') {
+    if (period === '1d') {
+      setData(isSensex ? REAL_SENSEX_1D_SERIES : REAL_NIFTY_1D_SERIES);
+    } else if (period === '1y') {
       setData(isSensex ? REAL_SENSEX_1Y_SERIES : REAL_NIFTY_1Y_SERIES);
     } else if (period === '1mo') {
       setData(isSensex ? REAL_SENSEX_SERIES : REAL_NIFTY_SERIES);
@@ -98,7 +112,9 @@ export default function IndexMiniChart({
     const range = maxPrice - minPrice || 1;
 
     const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-    const isUp = closes[closes.length - 1] >= closes[0];
+    const isUp = period === '1d'
+      ? ((changePct ?? 0) >= 0 || (change ?? 0) >= 0 || closes[closes.length - 1] >= closes[0])
+      : closes[closes.length - 1] >= closes[0];
     const lineColor = isUp ? '#10b981' : '#ef4444';
     const gradientColor = isUp
       ? (isDarkMode ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.12)')
