@@ -6,9 +6,13 @@ import yfinance as yf
 import pandas as pd
 import requests
 import os
+import logging
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 # Ensure .env is loaded regardless of current working directory
 _backend_env = Path(__file__).resolve().parent.parent / ".env"
@@ -101,9 +105,67 @@ _adapter = HTTPAdapter(pool_connections=30, pool_maxsize=30, max_retries=_retrie
 _session.mount("https://", _adapter)
 _session.mount("http://", _adapter)
 _session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/json,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
 })
+
+# ─── Yahoo Finance Crumb/Cookie Auth (required for cloud servers) ─────────────
+_yahoo_crumb = None
+_yahoo_crumb_ts = 0
+
+def _get_yahoo_crumb_and_cookies():
+    """Fetch a fresh Yahoo Finance crumb+cookie pair. Yahoo blocks cloud IPs
+    unless requests include a valid crumb obtained via their consent flow."""
+    global _yahoo_crumb, _yahoo_crumb_ts
+    # Reuse crumb for 30 minutes
+    if _yahoo_crumb and (time.time() - _yahoo_crumb_ts) < 1800:
+        return _yahoo_crumb
+    try:
+        # Step 1: Hit Yahoo Finance to get cookies
+        consent_resp = _session.get("https://fc.yahoo.com", timeout=5, allow_redirects=True)
+        # Step 2: Fetch crumb using the session cookies
+        crumb_resp = _session.get(
+            "https://query2.finance.yahoo.com/v1/test/getcrumb",
+            timeout=5,
+        )
+        if crumb_resp.ok and crumb_resp.text and len(crumb_resp.text) < 50:
+            _yahoo_crumb = crumb_resp.text.strip()
+            _yahoo_crumb_ts = time.time()
+            logger.info(f"[Yahoo] Obtained fresh crumb: {_yahoo_crumb[:8]}...")
+            return _yahoo_crumb
+        else:
+            logger.warning(f"[Yahoo] Crumb fetch failed: status={crumb_resp.status_code}, body={crumb_resp.text[:100]}")
+    except Exception as e:
+        logger.warning(f"[Yahoo] Crumb/cookie auth failed: {e}")
+    return None
+
+
+def _fetch_yahoo_quote_meta(ticker: str) -> dict:
+    """Fetch real-time quote metadata from Yahoo Finance v8 chart API."""
+    try:
+        crumb = _get_yahoo_crumb_and_cookies()
+        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?range=1d&interval=1d"
+        if crumb:
+            url += f"&crumb={crumb}"
+        resp = _session.get(url, timeout=5)
+        if resp.ok:
+            result = resp.json().get("chart", {}).get("result", [])
+            if result:
+                meta = result[0].get("meta", {})
+                return {
+                    "price": meta.get("regularMarketPrice", 0.0),
+                    "prev_close": meta.get("chartPreviousClose") or meta.get("previousClose", 0.0),
+                    "day_high": meta.get("regularMarketDayHigh", 0.0),
+                    "day_low": meta.get("regularMarketDayLow", 0.0),
+                    "volume": meta.get("regularMarketVolume", 0),
+                }
+        else:
+            logger.warning(f"[Yahoo] Quote meta failed for {ticker}: HTTP {resp.status_code}")
+    except Exception as e:
+        logger.warning(f"[Yahoo] Quote meta error for {ticker}: {e}")
+    return {}
 
 # In-Memory RAM Cache for ultra-fast <5ms lookups
 _FAST_RAM_CACHE = {}
@@ -177,8 +239,10 @@ def get_quote(ticker: str) -> dict:
         v = getattr(fi, "last_volume", None) or fi.get("last_volume") or fi.get("lastVolume")
         if v:
             vol = int(v)
-    except Exception:
-        pass
+        if price:
+            logger.info(f"[Quote] yfinance OK for {t}: ₹{price}")
+    except Exception as e:
+        logger.warning(f"[Quote] yfinance fast_info failed for {t}: {e}")
 
     # 2. Secondary: Yahoo Chart Meta
     if not price:
@@ -243,7 +307,8 @@ def normalize_period(period: str) -> str:
 # ─── Price History ────────────────────────────────────────────────────────────
 
 def _fetch_yahoo_chart_api(ticker: str, period: str = "3mo") -> list[dict]:
-    """Fetch real live OHLCV time-series directly from Yahoo Finance v8 chart API."""
+    """Fetch real live OHLCV time-series directly from Yahoo Finance v8 chart API.
+    Uses crumb+cookie auth to bypass Yahoo's cloud IP blocking."""
     t = normalize_ticker(ticker)
     norm_p = normalize_period(period)
     range_map = {
@@ -257,59 +322,81 @@ def _fetch_yahoo_chart_api(ticker: str, period: str = "3mo") -> list[dict]:
     r_val = range_map.get(norm_p, "3mo")
     i_val = interval_map.get(norm_p, "1d")
 
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range={r_val}&interval={i_val}"
-    try:
-        resp = _session.get(url, timeout=4)
-        if resp.ok:
+    crumb = _get_yahoo_crumb_and_cookies()
+
+    # Try both query2 (authenticated) and query1 (legacy)
+    endpoints = []
+    if crumb:
+        endpoints.append(f"https://query2.finance.yahoo.com/v8/finance/chart/{t}?range={r_val}&interval={i_val}&crumb={crumb}")
+    endpoints.append(f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range={r_val}&interval={i_val}")
+    endpoints.append(f"https://query2.finance.yahoo.com/v8/finance/chart/{t}?range={r_val}&interval={i_val}")
+
+    for url in endpoints:
+        try:
+            resp = _session.get(url, timeout=6)
+            if not resp.ok:
+                logger.warning(f"[Chart API] HTTP {resp.status_code} for {t} from {url[:60]}")
+                continue
+
             body = resp.json()
             results_arr = body.get("chart", {}).get("result", [])
-            if results_arr:
-                data = results_arr[0]
-                timestamps = data.get("timestamp", [])
-                
-                # If 1d was empty (e.g. weekend / closed market), load 5d
-                if norm_p == "1d" and not timestamps:
-                    url_5d = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=5d&interval=15m"
-                    r5 = _session.get(url_5d, timeout=4)
-                    if r5.ok:
-                        d5 = r5.json().get("chart", {}).get("result", [])
-                        if d5:
-                            data = d5[0]
-                            timestamps = data.get("timestamp", [])
-                            i_val = "15m"
+            if not results_arr:
+                continue
 
-                indicators = data.get("indicators", {}).get("quote", [{}])[0]
-                opens = indicators.get("open", [])
-                highs = indicators.get("high", [])
-                lows = indicators.get("low", [])
-                closes = indicators.get("close", [])
-                volumes = indicators.get("volume", [])
+            data = results_arr[0]
+            timestamps = data.get("timestamp", [])
+            
+            # If 1d was empty (e.g. weekend / closed market), load 5d
+            if norm_p == "1d" and not timestamps:
+                fallback_url = f"https://query2.finance.yahoo.com/v8/finance/chart/{t}?range=5d&interval=15m"
+                if crumb:
+                    fallback_url += f"&crumb={crumb}"
+                r5 = _session.get(fallback_url, timeout=5)
+                if r5.ok:
+                    d5 = r5.json().get("chart", {}).get("result", [])
+                    if d5:
+                        data = d5[0]
+                        timestamps = data.get("timestamp", [])
+                        i_val = "15m"
 
-                points = []
-                for idx, ts in enumerate(timestamps):
-                    c = closes[idx] if idx < len(closes) else None
-                    if c is None or pd.isna(c):
-                        continue
-                    o = opens[idx] if idx < len(opens) and opens[idx] is not None and not pd.isna(opens[idx]) else c
-                    h = highs[idx] if idx < len(highs) and highs[idx] is not None and not pd.isna(highs[idx]) else max(o, c)
-                    l = lows[idx] if idx < len(lows) and lows[idx] is not None and not pd.isna(lows[idx]) else min(o, c)
-                    v = volumes[idx] if idx < len(volumes) and volumes[idx] is not None and not pd.isna(volumes[idx]) else 0
+            if not timestamps:
+                continue
 
-                    dt = pd.to_datetime(ts, unit="s")
-                    points.append({
-                        "date": dt.strftime("%Y-%m-%d %H:%M") if i_val in ["5m", "15m"] else dt.strftime("%Y-%m-%d"),
-                        "open": round(float(o), 2),
-                        "high": round(float(h), 2),
-                        "low": round(float(l), 2),
-                        "close": round(float(c), 2),
-                        "volume": int(v),
-                    })
+            indicators = data.get("indicators", {}).get("quote", [{}])[0]
+            opens = indicators.get("open", [])
+            highs = indicators.get("high", [])
+            lows = indicators.get("low", [])
+            closes = indicators.get("close", [])
+            volumes = indicators.get("volume", [])
 
-                if points:
-                    return points
-    except Exception:
-        pass
+            points = []
+            for idx, ts in enumerate(timestamps):
+                c = closes[idx] if idx < len(closes) else None
+                if c is None or pd.isna(c):
+                    continue
+                o = opens[idx] if idx < len(opens) and opens[idx] is not None and not pd.isna(opens[idx]) else c
+                h = highs[idx] if idx < len(highs) and highs[idx] is not None and not pd.isna(highs[idx]) else max(o, c)
+                l = lows[idx] if idx < len(lows) and lows[idx] is not None and not pd.isna(lows[idx]) else min(o, c)
+                v = volumes[idx] if idx < len(volumes) and volumes[idx] is not None and not pd.isna(volumes[idx]) else 0
 
+                dt = pd.to_datetime(ts, unit="s")
+                points.append({
+                    "date": dt.strftime("%Y-%m-%d %H:%M") if i_val in ["5m", "15m"] else dt.strftime("%Y-%m-%d"),
+                    "open": round(float(o), 2),
+                    "high": round(float(h), 2),
+                    "low": round(float(l), 2),
+                    "close": round(float(c), 2),
+                    "volume": int(v),
+                })
+
+            if points:
+                logger.info(f"[Chart API] Got {len(points)} candles for {t} ({norm_p})")
+                return points
+        except Exception as e:
+            logger.warning(f"[Chart API] Exception for {t}: {e}")
+            continue
+
+    logger.warning(f"[Chart API] All endpoints failed for {t} ({norm_p}), falling back to generated data")
     return []
 
 
@@ -347,10 +434,15 @@ def get_price_history(ticker: str, period: str = "3mo") -> list[dict]:
                     "volume": int(row.get("Volume", 0) or 0),
                 })
             if result:
+                logger.info(f"[History] yfinance OK for {t}: {len(result)} points ({norm_p})")
                 set_ram_cached(cache_key, result)
                 return result
-    except Exception:
-        pass
+            else:
+                logger.warning(f"[History] yfinance returned empty rows for {t} ({norm_p})")
+        else:
+            logger.warning(f"[History] yfinance returned empty DataFrame for {t} ({norm_p})")
+    except Exception as e:
+        logger.warning(f"[History] yfinance failed for {t} ({norm_p}): {e}")
 
     # 2. Second priority: Direct Live Yahoo Finance Chart API
     direct_pts = _fetch_yahoo_chart_api(ticker, norm_p)
