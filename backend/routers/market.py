@@ -174,10 +174,10 @@ async def remove_from_watchlist(ticker: str, db: AsyncSession = Depends(get_db))
 
 
 FALLBACK_INDICES = {
-    "NIFTY50": {"value": 24366.00, "change": -29.80, "change_pct": -0.12},
-    "SENSEX": {"value": 78009.25, "change": -70.75, "change_pct": -0.09},
-    "NIFTY_BANK": {"value": 52635.25, "change": 240.10, "change_pct": 0.46},
-    "NIFTY_IT": {"value": 38453.90, "change": 190.50, "change_pct": 0.50},
+    "NIFTY50": {"value": 24366.00, "change": -29.85, "change_pct": -0.12},
+    "SENSEX": {"value": 78009.25, "change": -70.71, "change_pct": -0.09},
+    "NIFTY_BANK": {"value": 57491.10, "change": -144.15, "change_pct": -0.25},
+    "NIFTY_IT": {"value": 31357.75, "change": -96.15, "change_pct": -0.31},
 }
 
 

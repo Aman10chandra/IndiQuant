@@ -104,10 +104,13 @@ export default function Dashboard() {
     ? watchlist.filter(w => w.sector?.includes('IT') || ['TCS', 'INFY', 'WIPRO'].includes(w.ticker))
     : watchlist;
 
-  const niftyVal = market?.NIFTY50?.value ?? 24395.85;
-  const niftyChgPct = market?.NIFTY50?.change_pct ?? 0.52;
-  const sensexVal = market?.SENSEX?.value ?? 79879.96;
-  const sensexChgPct = market?.SENSEX?.change_pct ?? 0.48;
+  const niftyVal = market?.NIFTY50?.value ?? 24366.00;
+  const niftyChg = market?.NIFTY50?.change ?? -29.85;
+  const niftyChgPct = market?.NIFTY50?.change_pct ?? -0.12;
+
+  const sensexVal = market?.SENSEX?.value ?? 78009.25;
+  const sensexChg = market?.SENSEX?.change ?? -70.71;
+  const sensexChgPct = market?.SENSEX?.change_pct ?? -0.09;
 
   return (
     <AppShell onRefresh={loadData}>
@@ -128,7 +131,7 @@ export default function Dashboard() {
                 name="NIFTY 50"
                 exchange="NSE"
                 price={niftyVal}
-                change={market?.NIFTY50?.change ?? 125.4}
+                change={niftyChg}
                 changePct={niftyChgPct}
               />
 
@@ -138,7 +141,7 @@ export default function Dashboard() {
                 name="BSE SENSEX"
                 exchange="BSE"
                 price={sensexVal}
-                change={market?.SENSEX?.change ?? 380.2}
+                change={sensexChg}
                 changePct={sensexChgPct}
               />
             </div>
